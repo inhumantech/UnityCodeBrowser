@@ -57,6 +57,8 @@ public class CodeBrowser : EditorWindow {
         { "String", "string" },
     };
 
+    Dictionary<NodeTypes, Texture> TypetoIcon;
+
     PopupExample Popup = new PopupExample();
     Rect PopupRect;
 
@@ -109,6 +111,15 @@ public class CodeBrowser : EditorWindow {
         titleContent = new GUIContent("Code Browser", Icons.CodeBrowser);
         LoadScriptNodes();
         wantsMouseMove = true;
+
+        TypetoIcon = new Dictionary<NodeTypes, Texture> {
+            { NodeTypes.Class, Icons.CodeBrowser },
+            { NodeTypes.Method, Icons.Method },
+            { NodeTypes.Property, Icons.Property },
+            { NodeTypes.Field, Icons.Field },
+            { NodeTypes.Event, Icons.Event },
+            { NodeTypes.Type, Icons.Type }
+        };
     }
 
     //====================================================================================================//
@@ -214,16 +225,6 @@ public class CodeBrowser : EditorWindow {
 
     //====================================================================================================//
     void OnGUI() {      
-        var ev = Event.current;
-        if (ev.type == EventType.MouseDown && ev.button == 0)
-            LeftDown = true;
-        else if (ev.type == EventType.MouseUp && ev.button == 0)
-            LeftDown = false;
-        else if (ev.type == EventType.MouseMove) {
-            //LoadScriptNodes();
-            //Repaint();
-        } 
-
         FoldoutStyle = new GUIStyle(SceneSkin.GetStyle("Foldout"));
         FoldoutStyle.clipping = TextClipping.Clip;
         FoldoutStyle.wordWrap = false;
@@ -277,22 +278,32 @@ public class CodeBrowser : EditorWindow {
         //GUILayout.EndScrollView();
 
         // Floating //
+        var ev = Event.current;
         Rect panel = new Rect(Vector2.zero, position.size);
         bool over = panel.Contains(ev.mousePosition);
-        if (ev.type == EventType.Repaint && !over && LeftDown)
+
+        if (ev.type == EventType.MouseDown && ev.button == 0)
+            LeftDown = true;
+        else if (ev.type == EventType.MouseUp && ev.button == 0)
             LeftDown = false;
 
-        if (over && CodeSnippet != "" /*&& OverType == NodeTypes.Method*/) {
-            GUI.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 0.9f);
-
-            Vector2 size = Skin.textArea.CalcSize(new GUIContent(CodeSnippet));
-            Rect popupRect = new Rect(Event.current.mousePosition - new Vector2(0, 0), size);
-            GUI.TextArea(popupRect, CodeSnippet, Skin.textArea);
+        if (over) {
+            if (CodeSnippet != "" && !LeftDown) {
+                GUI.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 0.9f);
+                Vector2 size = Skin.textArea.CalcSize(new GUIContent(CodeSnippet));
+                Rect popupRect = new Rect(Event.current.mousePosition - new Vector2(0, 0), size);
+                GUI.TextArea(popupRect, CodeSnippet, Skin.textArea);
+                GUI.backgroundColor = Color.white;
+            }
         }
+        else if(ev.type == EventType.Repaint)
+            LeftDown = false;
     }
 
     //====================================================================================================//
     void LoadScriptNodes() {
+        double start = EditorApplication.timeSinceStartup;
+
         foreach (GameObject obj in Selection.gameObjects) {
             Component[] components = obj.GetComponents<Component>();
             foreach (Component component in components) {
@@ -301,28 +312,23 @@ public class CodeBrowser : EditorWindow {
 
                 MonoBehaviour mono = (MonoBehaviour)component;
                 MonoScript script = MonoScript.FromMonoBehaviour(mono);
-                //string path = AssetDatabase.GetAssetPath(script);
-                //path = Path.GetFullPath(path);
 
                 // Roslyn // 
                 Microsoft.CodeAnalysis.SyntaxTree tree = CSharpSyntaxTree.ParseText(script.text);
                 CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
                 MetadataReference mscorlib = MetadataReference.CreateFromFile(typeof(object).GetTypeInfo().Assembly.Location);
-                var compilation = CSharpCompilation.Create("MyCompilation", syntaxTrees: new[] { tree }, references: new[] { mscorlib });      
+                var compilation = CSharpCompilation.Create("Loader", syntaxTrees: new[] { tree }, references: new[] { mscorlib });      
                 var model = compilation.GetSemanticModel(tree);
-
+                
                 // Walk Nodes //
                 var data = new ScriptWalker(component, model);
-                data.Visit(root);
-                foreach (var token in root.DescendantTokens()) {
-                    data.VisitToken(token);
-                }
-                
+                data.Visit(root);               
                 ScriptClasses[component.GetInstanceID()] = data.Nodes;
-                CodeFull = data.Text.ToString();
+                CodeFull = data.Text.ToString();              
                 //File.WriteAllText("c:/Spark/Types.txt", data.Text.ToString());
             }
         }
+        //Debug.Log("Time: " + (EditorApplication.timeSinceStartup - start).ToString("N2") + "s");
     }
 
     //====================================================================================================//
@@ -641,102 +647,44 @@ public class CodeBrowser : EditorWindow {
         if (!((showPublic || showPrivate) && (showInstance || showStatic)))
             return;
 
-        LastPropName = prop.Name;
-        string text = prop.Name;// + " <color=#999>" + prop.type + "</color>";
+        if (!(prop.Type == NodeTypes.Method && Prefs.Methods || prop.Type == NodeTypes.Property && Prefs.Properties || prop.Type == NodeTypes.Field && Prefs.Fields || prop.Type == NodeTypes.Event && Prefs.Events))
+            return;
+    
+        string text = prop.Name;
+        LastPropName = text;
 
+        // Hover //
         Rect rect = GUILayoutUtility.GetLastRect();
         rect = new Rect(rect.x, rect.y + 0 + 14, rect.width, rect.height - 0);
-        string value = "";
         bool over = false;
+
         if (rect.Contains(Event.current.mousePosition)) {
-            //value = " = <color=#7f7>" + field.GetValue(component)?.ToString() + "</color>";
             over = true;
             OverType = prop.Type;
-            CodeSnippet = prop.Code;
+            CodeSnippet = prop.Docs == "" ? prop.Code : string.Join("\n\n", prop.Docs, prop.Code);
             HoverNode = prop;
 
             if(LeftDown)
                 OpenScript(prop, component);
         }
 
-        //EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+        // Draw //
+        EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
         {
-            if (prop.Type == NodeTypes.Method && Prefs.Methods) {
-                EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+            if (prop.Type == NodeTypes.Field || prop.Type == NodeTypes.Property)
+                text += "  <size=10><color=" + (prop.isPublic ? "#777" : "#555") + ">" + prop.DataType + "</color></size>";
 
-                GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
-                GUI.color *= over ? 1.5f : 1;
+            GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
+            GUI.color *= over ? 1.5f : 1;
+            EditorGUILayout.LabelField(new GUIContent(TypetoIcon[prop.Type]), Styles.Icon, GUILayout.Width(16));
 
-                EditorGUILayout.LabelField(new GUIContent(Icons.Method), Styles.Icon, GUILayout.Width(16));
+            GUI.Label(GetIndentedControlRect(), text, Styles.PropertyLabel);
+            //if (GUI.Button(GetIndentedControlRect(), text, Styles.PropertyLabel))
+            //OpenScript(prop, component);
 
-                GUIContent content = new GUIContent(text);
-
-                if (GUI.Button(GetIndentedControlRect(), content, Styles.PropertyLabel))
-                    OpenScript(prop, component);
-
-                Rect last = GUILayoutUtility.GetLastRect();
-                last = new Rect(last.x, last.y + 2, last.width, last.height - 4);
-                /*if (last.Contains(Event.current.mousePosition)) {
-                    OpenScript(prop, component, method, false);
-                    Repaint();
-                }*/
-
-                GUI.color = Color.white;
-                EditorGUILayout.EndHorizontal();
-            }
-            else if (prop.Type == NodeTypes.Property && Prefs.Properties) {
-                EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
- 
-                text = prop.Name + "  <size=10><color=" + (prop.isPublic ? "#777" : "#555") + ">" + prop.Name + "</color></size>";
-
-                GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
-                GUI.color *= over ? 1.5f : 1;
-
-                EditorGUILayout.LabelField(new GUIContent(Icons.Property), Styles.Icon, GUILayout.Width(16));
-                EditorGUILayout.LabelField(text, Styles.PropertyLabel);
-                GUI.color = Color.white;
-                EditorGUILayout.EndHorizontal();
-            }
-            else if (prop.Type == NodeTypes.Field && Prefs.Fields) {            
-                EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
-                //text = prop.Name + "  <size=10><color=" + (field.IsPublic ? "#777" : "#555") + ">" + field.FieldType.Name + "</color></size>";
-                text = prop.Name;
-                if (true)
-                    text += "  <size=10><color=" + (prop.isPublic ? "#777" : "#555") + ">" + prop.DataType + "</color></size>" + value;
-
-                GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
-                GUI.color *= over ? 1.5f : 1;
-
-                EditorGUILayout.LabelField(new GUIContent(Icons.Field), Styles.Icon, GUILayout.Width(16));
-                if (GUI.Button(GetIndentedControlRect(), text, Styles.PropertyLabel))
-                    OpenScript(prop, component);
-
-                GUI.color = Color.white;
-                EditorGUILayout.EndHorizontal();              
-            }
-            else if (prop.Type == NodeTypes.Event && Prefs.Events) {
-                EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
-                //text = prop.Name + "  <size=10><color=" + (field.IsPublic ? "#777" : "#555") + ">" + field.FieldType.Name + "</color></size>";
-                text = prop.Name;
-                if (true)
-                    text += "  <size=10><color=" + (prop.isPublic ? "#777" : "#555") + ">" + prop.DataType + "</color></size>" + value;
-
-                GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
-                GUI.color *= over ? 1.5f : 1;
-
-                EditorGUILayout.LabelField(new GUIContent(Icons.Event), Styles.Icon, GUILayout.Width(16));
-                if (GUI.Button(GetIndentedControlRect(), text, Styles.PropertyLabel)) {
-                    // Fix //
-                    //SearchScript(prop, component, field);
-                }
-
-                GUI.color = Color.white;
-                EditorGUILayout.EndHorizontal();              
-            }
-            else {
-                //EditorGUILayout.LabelField(text, Styles.PropertyLabel);
-            }
+            GUI.color = Color.white;
         }
+        EditorGUILayout.EndHorizontal();
     }
 
     //====================================================================================================//

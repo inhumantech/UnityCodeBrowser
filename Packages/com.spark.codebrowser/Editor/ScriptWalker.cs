@@ -7,6 +7,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using UnityEngine;
 
 public class ScriptWalker : CSharpSyntaxWalker {
     public List<Node> Nodes = new List<Node>();
@@ -33,71 +34,47 @@ public class ScriptWalker : CSharpSyntaxWalker {
         Property,
     }
 
+    public Dictionary<TokenKind, string> Colors = new Dictionary<TokenKind, string>() {
+        { TokenKind.Keyword, "#7FF" },
+        { TokenKind.Identifier, "#F7F" },
+        { TokenKind.StringLiteral, "#77F" },
+        { TokenKind.CharacterLiteral, "#77F" },
+        { TokenKind.Comment, "#7F7" },
+        { TokenKind.DisabledText, "#777" },
+        { TokenKind.Region, "#F77" },
+        { TokenKind.NamedType, "#FF7" },
+        { TokenKind.Namespace, "#FF7" },
+        { TokenKind.Parameter, "#F77" },
+    };
+
     //====================================================================================================//
-    public ScriptWalker(UnityEngine.Object obj, SemanticModel model) {
+    public ScriptWalker(UnityEngine.Object obj, SemanticModel model) : base(SyntaxWalkerDepth.Node) {
         Module = obj;
         Model = model;
         Text = new StringBuilder();
-
-
-        /*foreach (var t in obj.GetType().Module.GetTypes()) {
-            Types.Add(t.FullName);
-            buffer += t.Name + "\n";
-            Debug.Log(t.FullName);
-        }*/
-
         Type type = obj.GetType();
-
-        // Find DLL //
-        //string filename = type.Module.Assembly.Location;
-        //var r = new ReaderParameters { ReadSymbols = true };
-        //var assembly = AssemblyDefinition.ReadAssembly(filename, r);
-
-        /*foreach (var reference in assembly.MainModule.AssemblyReferences) {
-            //Types.Add(reference.Name + ".");
-            buffer += reference.Name + "\n";
-        }*/
-
 
         foreach (var item in type.GetMembers()) {
             if (item is FieldInfo) {
                 string n = (item as FieldInfo).FieldType.AssemblyQualifiedName;
-
                 Type t = Type.GetType(n);
-                if (t != null && !Types.ContainsKey(t.Name)) {
-                    Types[t.Name] = t;
-                    //Debug.Log(n + " : " + t.Name);
-                }
-            }
 
-            if (item is PropertyInfo) {
+                if (t != null && !Types.ContainsKey(t.Name))
+                    Types[t.Name] = t;
+            }
+            else if (item is PropertyInfo) {
                 string n = (item as PropertyInfo).PropertyType.AssemblyQualifiedName;
-
                 Type t = Type.GetType(n);
-                if (t != null && !Types.ContainsKey(t.Name)) {
+
+                if (t != null && !Types.ContainsKey(t.Name))
                     Types[t.Name] = t;
-                    //Debug.Log(n + " : " + t.Name);
-                }
             }
-
-            //if (item is MethodInfo)
-            //    Debug.Log((item as MethodInfo).qu);
-
-            /*foreach (var a in item.GetType().Module.GetTypes()) {
-                Debug.Log(a.AssemblyQualifiedName);
-            }*/
         }
-
-        //File.WriteAllText("c:/Spark/Types.txt", buffer);
-        //Debug.Log(buffer);
-        //Debug.Log("Type Count: " + Types.Count);
     }
 
     //====================================================================================================//
     public override void VisitUsingDirective(UsingDirectiveSyntax node) {
         Usings.Add(node.Name.ToString());
-        //Debug.Log(node.Name.ToString());
-
         base.VisitUsingDirective(node);
     }
 
@@ -109,29 +86,43 @@ public class ScriptWalker : CSharpSyntaxWalker {
 
     //====================================================================================================//
     public override void VisitMethodDeclaration(MethodDeclarationSyntax node) {
+        string docs = GetDocs(node);
         var mods = GetModifiers(node.Modifiers);
-        AddtoClass(new Node(node.Identifier.ToString(), NodeTypes.Method, node, mods.Public, mods.Static));
+        AddtoClass(new Node(node.Identifier.ToString(), NodeTypes.Method, node, docs, mods.Public, mods.Static));
         base.VisitMethodDeclaration(node);
+    }
+
+    //====================================================================================================//
+    string GetDocs(SyntaxNode node) {
+        List<string> lines = new List<string>();
+        foreach (var trivia in node.GetLeadingTrivia()) {
+            if (!trivia.HasStructure)
+                continue;
+
+            var structure = trivia.GetStructure();
+            foreach (var n in structure.ChildNodes()) {
+                if (n.Kind() == SyntaxKind.XmlElement) {
+                    var xml = (XmlElementSyntax)n;
+                    lines.Add("<b><color=cyan>" + xml.StartTag.Name + "</color></b>: " + xml.Content.ToString().Replace("///", "").Trim());
+                }
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 
     //====================================================================================================//
     public override void VisitFieldDeclaration(FieldDeclarationSyntax node) {
         foreach (var v in node.Declaration.Variables) {
+            string docs = GetDocs(v);
             var mods = GetModifiers(node.Modifiers);
             string typeName = node.Declaration.Type.ToString();
-
-            // Check if Event //
             bool isEvent = false;
 
-            if (Types.ContainsKey(typeName)) {
-                //Debug.Log("Found: " + typeName + " : " + Types[typeName].AssemblyQualifiedName);
-                if (Types[typeName].IsSubclassOf(typeof(UnityEventBase))) {
-                    //Debug.Log("EVENT");
-                    isEvent = true;
-                }
-            }
+            if (Types.ContainsKey(typeName) && Types[typeName].IsSubclassOf(typeof(UnityEventBase)))
+                isEvent = true;
 
-            AddtoClass(new Node(v.Identifier.ToString(), isEvent ? NodeTypes.Event : NodeTypes.Field, v, mods.Public, mods.Static));
+            AddtoClass(new Node(v.Identifier.ToString(), isEvent ? NodeTypes.Event : NodeTypes.Field, v, docs, mods.Public, mods.Static));
         }
 
         base.VisitFieldDeclaration(node);
@@ -139,8 +130,9 @@ public class ScriptWalker : CSharpSyntaxWalker {
 
     //====================================================================================================//
     public override void VisitPropertyDeclaration(PropertyDeclarationSyntax node) {
+        string docs = GetDocs(node);
         var mods = GetModifiers(node.Modifiers);
-        AddtoClass(new Node(node.Identifier.ToString(), NodeTypes.Property, node, mods.Public, mods.Static));
+        AddtoClass(new Node(node.Identifier.ToString(), NodeTypes.Property, node, docs, mods.Public, mods.Static));
         base.VisitPropertyDeclaration(node);
     }
 
@@ -156,17 +148,6 @@ public class ScriptWalker : CSharpSyntaxWalker {
     }
 
     //====================================================================================================//
-    public Type GetTypeByName(string name) {
-        /*if(Types.Contains(name)) {
-            Debug.Log("Found: " + name);
-            
-            return null;
-        }*/
-
-        return null;
-    }
-
-    //====================================================================================================//
     (bool Public, bool Static) GetModifiers(SyntaxTokenList modifiers) {
         List<string> m = new List<string>();
         m = modifiers.Select(m => m.ToString()).ToList();
@@ -176,13 +157,9 @@ public class ScriptWalker : CSharpSyntaxWalker {
 
     //====================================================================================================//
     public override void VisitToken(SyntaxToken token) {
-        //Debug.Log("Token: " + token.Text);
-
         base.VisitLeadingTrivia(token);
-
         var isProcessed = false;
 
-        var info = Model.GetSymbolInfo(token.Parent);
         if (CodeBrowser.HoverNode?.SyntaxNode != null && token.Parent.AncestorsAndSelf().Contains(CodeBrowser.HoverNode.SyntaxNode)) {
             WriteCode(TokenKind.NamedType, token.Text);
         }
@@ -268,43 +245,30 @@ public class ScriptWalker : CSharpSyntaxWalker {
 
     //====================================================================================================//
     public override void VisitTrivia(SyntaxTrivia trivia) {
-        //Debug.Log("Trivia: " + trivia.ToFullString());
+        string text = trivia.ToFullString();
 
         switch (trivia.Kind()) {
             case SyntaxKind.MultiLineCommentTrivia:
             case SyntaxKind.SingleLineCommentTrivia:
-                WriteCode(TokenKind.Comment, trivia.ToFullString());
+                WriteCode(TokenKind.Comment, text);
                 break;
             case SyntaxKind.DisabledTextTrivia:
-                WriteCode(TokenKind.DisabledText, trivia.ToFullString());
+                WriteCode(TokenKind.DisabledText, text);
                 break;
             case SyntaxKind.DocumentationCommentExteriorTrivia:
-                WriteCode(TokenKind.Comment, trivia.ToFullString());
+                WriteCode(TokenKind.Comment, text);
                 break;
             case SyntaxKind.RegionDirectiveTrivia:
             case SyntaxKind.EndRegionDirectiveTrivia:
-                WriteCode(TokenKind.Region, trivia.ToFullString());
+                WriteCode(TokenKind.Region, text);
                 break;
             default:
-                WriteCode(TokenKind.None, trivia.ToFullString());
+                WriteCode(TokenKind.None, text);
                 break;
         }
+
         base.VisitTrivia(trivia);
     }
-
-    //====================================================================================================//
-    public Dictionary<TokenKind, string> Colors = new Dictionary<TokenKind, string>() {
-        { TokenKind.Keyword, "#7FF" },
-        { TokenKind.Identifier, "#F7F" },
-        { TokenKind.StringLiteral, "#77F" },
-        { TokenKind.CharacterLiteral, "#77F" },
-        { TokenKind.Comment, "#7F7" },
-        { TokenKind.DisabledText, "#777" },
-        { TokenKind.Region, "#F77" },
-        { TokenKind.NamedType, "#FF7" },
-        { TokenKind.Namespace, "#FF7" },
-        { TokenKind.Parameter, "#F77" },
-    };
 
     //====================================================================================================//
     public void WriteCode(TokenKind kind, string text) {
@@ -373,15 +337,17 @@ public class Node {
     public int StartLine;
     public int EndLine;
     public string Code;
+    public string Docs;
     public List<Node> Nodes = new List<Node>();
 
-    public Node(string name, NodeTypes type, SyntaxNode node, bool pub = true, bool stat = false) {
+    public Node(string name, NodeTypes type, SyntaxNode node, string docs = "", bool pub = true, bool stat = false) {
         Name = name;
         Type = type;
         SyntaxNode = node;
         StartLine = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
         EndLine = node.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
         Code = node.ToString();
+        Docs = docs;
         isPublic = pub;
         isStatic = stat;
     }
