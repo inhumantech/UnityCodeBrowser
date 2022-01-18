@@ -80,7 +80,7 @@ public class ScriptWalker : CSharpSyntaxWalker {
 
     //====================================================================================================//
     public override void VisitClassDeclaration(ClassDeclarationSyntax node) {
-        Nodes.Add(new Node(node.Identifier.ToString(), NodeTypes.Class, node));
+        Nodes.Add(new Node(node.Identifier.ToString(), MemberTypes.Custom, node));
         base.VisitClassDeclaration(node);
     }
 
@@ -88,7 +88,7 @@ public class ScriptWalker : CSharpSyntaxWalker {
     public override void VisitMethodDeclaration(MethodDeclarationSyntax node) {
         string docs = GetDocs(node);
         var mods = GetModifiers(node.Modifiers);
-        AddtoClass(new Node(node.Identifier.ToString(), NodeTypes.Method, node, docs, mods.Public, mods.Static));
+        AddtoClass(new Node(node.Identifier.ToString(), MemberTypes.Method, node, docs, mods.Public, mods.Static));
         base.VisitMethodDeclaration(node);
     }
 
@@ -122,7 +122,7 @@ public class ScriptWalker : CSharpSyntaxWalker {
             if (Types.ContainsKey(typeName) && Types[typeName].IsSubclassOf(typeof(UnityEventBase)))
                 isEvent = true;
 
-            AddtoClass(new Node(v.Identifier.ToString(), isEvent ? NodeTypes.Event : NodeTypes.Field, v, docs, mods.Public, mods.Static));
+            AddtoClass(new Node(v.Identifier.ToString(), isEvent ? MemberTypes.Event : MemberTypes.Field, v, docs, mods.Public, mods.Static));
         }
 
         base.VisitFieldDeclaration(node);
@@ -132,7 +132,7 @@ public class ScriptWalker : CSharpSyntaxWalker {
     public override void VisitPropertyDeclaration(PropertyDeclarationSyntax node) {
         string docs = GetDocs(node);
         var mods = GetModifiers(node.Modifiers);
-        AddtoClass(new Node(node.Identifier.ToString(), NodeTypes.Property, node, docs, mods.Public, mods.Static));
+        AddtoClass(new Node(node.Identifier.ToString(), MemberTypes.Property, node, docs, mods.Public, mods.Static));
         base.VisitPropertyDeclaration(node);
     }
 
@@ -326,10 +326,9 @@ public class ScriptWalker : CSharpSyntaxWalker {
     }
 }
 
-public enum NodeTypes { Class, Method, Property, Field, Event, Type };
 public class Node {
     public string Name;
-    public NodeTypes Type;
+    public MemberTypes Type;
     public string DataType;
     public bool isPublic = true;
     public bool isStatic;
@@ -340,13 +339,13 @@ public class Node {
     public string Docs;
     public List<Node> Nodes = new List<Node>();
 
-    public Node(string name, NodeTypes type, SyntaxNode node, string docs = "", bool pub = true, bool stat = false) {
+    public Node(string name, MemberTypes type, SyntaxNode node, string docs = "", bool pub = true, bool stat = false) {
         Name = name;
         Type = type;
         SyntaxNode = node;
-        StartLine = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-        EndLine = node.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
-        Code = node.ToString();
+        StartLine = node != null ? node.GetLocation().GetLineSpan().StartLinePosition.Line + 1 : 0;
+        EndLine = node != null ? node.GetLocation().GetLineSpan().EndLinePosition.Line + 1 : 0;
+        Code = node != null ? node.ToString() : "";
         Docs = docs;
         isPublic = pub;
         isStatic = stat;

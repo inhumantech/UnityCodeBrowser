@@ -2,15 +2,28 @@
     "name": "com.spark.codebrowser",
     "rootNamespace": "",
     "references": [
-        "GUID:478a2357cc57436488a56e564b08d223"
+        "GUID:478a2357cc57436488a56e564b08d223",
+        "GUID:921f6a119bc324303ae24c2979174be7"
     ],
     "includePlatforms": [
         "Editor"
     ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "ICSharpCode.SharpZipLib.dll",
+        "Microsoft.CodeAnalysis.dll",
+        "Microsoft.CodeAnalysis.CSharp.dll",
+        "Microsoft.CodeAnalysis.CSharp.Scripting.dll",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll",
+        "Microsoft.CodeAnalysis.Scripting.dll",
+        "Microsoft.CodeAnalysis.Workspaces.dll",
+        "Mono.Cecil.dll",
+        "System.Collections.Immutable.dll",
+        "Newtonsoft.Json.dll",
+        ""
+    ],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],

@@ -57,7 +57,8 @@ public class CodeBrowser : EditorWindow {
         { "String", "string" },
     };
 
-    Dictionary<NodeTypes, Texture> TypetoIcon;
+    Dictionary<MemberTypes, Texture> TypeIcon;
+    Dictionary<MemberTypes, Texture> MemberIcon;
 
     PopupExample Popup = new PopupExample();
     Rect PopupRect;
@@ -76,7 +77,7 @@ public class CodeBrowser : EditorWindow {
     int c;
     Dictionary<int, List<Node>> ScriptClasses = new Dictionary<int, List<Node>>();
     static public Node HoverNode;
-    NodeTypes OverType;
+    MemberTypes OverType;
 
     //====================================================================================================//
     [MenuItem("Window/Code Browser")]
@@ -112,13 +113,22 @@ public class CodeBrowser : EditorWindow {
         LoadScriptNodes();
         wantsMouseMove = true;
 
-        TypetoIcon = new Dictionary<NodeTypes, Texture> {
-            { NodeTypes.Class, Icons.CodeBrowser },
-            { NodeTypes.Method, Icons.Method },
-            { NodeTypes.Property, Icons.Property },
-            { NodeTypes.Field, Icons.Field },
-            { NodeTypes.Event, Icons.Event },
-            { NodeTypes.Type, Icons.Type }
+        TypeIcon = new Dictionary<MemberTypes, Texture> {
+            { MemberTypes.Custom, Icons.CodeBrowser },
+            { MemberTypes.Method, Icons.Method },
+            { MemberTypes.Property, Icons.Property },
+            { MemberTypes.Field, Icons.Field },
+            { MemberTypes.Event, Icons.Event },
+            { MemberTypes.NestedType, Icons.Type }
+        };
+
+        MemberIcon = new Dictionary<MemberTypes, Texture> {
+            { MemberTypes.Method, Icons.Method },
+            { MemberTypes.Property, Icons.Property },
+            { MemberTypes.Field, Icons.Field },
+            { MemberTypes.Event, Icons.Event },
+            { MemberTypes.Constructor, Icons.Constructor },
+            { MemberTypes.NestedType, Icons.Type }
         };
     }
 
@@ -198,10 +208,10 @@ public class CodeBrowser : EditorWindow {
         if (node.ChildNodes().Count() == 0) {
             string text = node.ToString();
             if (node.Kind() == SyntaxKind.MethodDeclaration) {
-                
+
 
                 text = "<color=cyan>" + text + "</color>";
-                
+
             }
             CodeSnippet += text + "\n";
         }
@@ -224,7 +234,12 @@ public class CodeBrowser : EditorWindow {
     }
 
     //====================================================================================================//
-    void OnGUI() {      
+    void OnGUI() {
+        // Call Code //
+        dynamic script = new Obj(CompilerTool.DllFullPath(), "GUI");
+        script.CodeBrowser();
+
+
         FoldoutStyle = new GUIStyle(SceneSkin.GetStyle("Foldout"));
         FoldoutStyle.clipping = TextClipping.Clip;
         FoldoutStyle.wordWrap = false;
@@ -234,12 +249,23 @@ public class CodeBrowser : EditorWindow {
         //FoldoutStyle.fontSize = 10;
 
         //if (GUILayout.Button("List Packages")) {
-            //Request = Client.List();
-            //Client.
-            //EditorApplication.update += Progress;
+        //Request = Client.List();
+        //Client.
+        //EditorApplication.update += Progress;
         //}
 
-        if(Selection.activeObject != null) {
+        if (GUILayout.Button("Application"))
+            ReflectionObject = typeof(Application);
+        if (GUILayout.Button("Editor"))
+            ReflectionObject = typeof(EditorApplication);
+        if (GUILayout.Button("GUI"))
+            ReflectionObject = typeof(GUI);
+        if (GUILayout.Button("Selection"))
+            ReflectionObject = Selection.activeObject;
+
+        GUILayout.TextField(ReflectionObject.ToString());
+
+        if (Selection.activeObject != null) {
             UnityEngine.Object obj = Selection.activeObject;
             Type type = obj.GetType();
             //EditorGUILayout.TextField("Type", type.Name);
@@ -265,8 +291,22 @@ public class CodeBrowser : EditorWindow {
 
         ScrollPos = GUILayout.BeginScrollView(ScrollPos);
         {
-            foreach (GameObject obj in Selection.gameObjects)
-                ObjectGUI(obj);
+            ReflectionGUI(ReflectionObject);
+
+
+
+            foreach (var obj in Selection.objects) {
+                //ReflectionGUI(obj);
+                continue;
+
+                Type type = obj.GetType();
+                if (type == typeof(GameObject))
+                    ObjectGUI((GameObject)obj);
+                else if (type == typeof(MonoScript))
+                    ScriptGUI((MonoScript)obj);
+                else
+                    EditorGUILayout.LabelField(obj.name + " : " + obj.GetType().Name);
+            }
 
             GUILayout.FlexibleSpace();
         }
@@ -296,7 +336,7 @@ public class CodeBrowser : EditorWindow {
                 GUI.backgroundColor = Color.white;
             }
         }
-        else if(ev.type == EventType.Repaint)
+        else if (ev.type == EventType.Repaint)
             LeftDown = false;
     }
 
@@ -317,14 +357,14 @@ public class CodeBrowser : EditorWindow {
                 Microsoft.CodeAnalysis.SyntaxTree tree = CSharpSyntaxTree.ParseText(script.text);
                 CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
                 MetadataReference mscorlib = MetadataReference.CreateFromFile(typeof(object).GetTypeInfo().Assembly.Location);
-                var compilation = CSharpCompilation.Create("Loader", syntaxTrees: new[] { tree }, references: new[] { mscorlib });      
+                var compilation = CSharpCompilation.Create("Loader", syntaxTrees: new[] { tree }, references: new[] { mscorlib });
                 var model = compilation.GetSemanticModel(tree);
-                
+
                 // Walk Nodes //
                 var data = new ScriptWalker(component, model);
-                data.Visit(root);               
-                ScriptClasses[component.GetInstanceID()] = data.Nodes;
-                CodeFull = data.Text.ToString();              
+                data.Visit(root);
+                ScriptClasses[script.GetInstanceID()] = data.Nodes;
+                CodeFull = data.Text.ToString();
                 //File.WriteAllText("c:/Spark/Types.txt", data.Text.ToString());
             }
         }
@@ -430,7 +470,7 @@ public class CodeBrowser : EditorWindow {
                 Prefs.Events = GUILayout.Toggle(Prefs.Events, Icons.Event, EditorStyles.toolbarButton, GUILayout.Width(26));
                 Prefs.Types = GUILayout.Toggle(Prefs.Types, Icons.Type, EditorStyles.toolbarButton, GUILayout.Width(26));
                 //Prefs.Constructor = GUILayout.Toggle(Prefs.Constructor, ConstructorIcon, EditorStyles.toolbarButton, GUILayout.Width(26));
-             
+
                 //Prefs.Public = GUILayout.Toggle(Prefs.Public, "Public", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
                 //Prefs.Instance = GUILayout.Toggle(Prefs.Instance, "Instance", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
                 //Prefs.Declared = GUILayout.Toggle(Prefs.Declared, "Declared", EditorStyles.toolbarButton, GUILayout.ExpandWidth(false));
@@ -498,8 +538,12 @@ public class CodeBrowser : EditorWindow {
                 EditorGUI.indentLevel++;
                 Component[] components = obj.GetComponents<Component>();
 
-                foreach (Component c in components)
-                    ComponentGUI(c);
+                foreach (Component c in components) {
+                    if (c is MonoBehaviour && Prefs.Mono) {
+                        MonoScript script = MonoScript.FromMonoBehaviour((MonoBehaviour)c);
+                        ScriptGUI(script);
+                    }
+                }
 
                 EditorGUI.indentLevel--;
             }
@@ -508,42 +552,204 @@ public class CodeBrowser : EditorWindow {
     }
 
     //====================================================================================================//
-    void ComponentGUI(Component component) {
-        // Get States //
-        List<MemberInfo> states = new List<MemberInfo>();
-        bool isMono = component is MonoBehaviour;
+    public object ReflectionObject = typeof(Application);
 
-        if (!isMono && !Prefs.Mono)
-            return;
-
-        BindingFlags flags = 0;
-        if (Prefs.Public) flags |= BindingFlags.Public;
-        if (Prefs.Private) flags |= BindingFlags.NonPublic;
-        if (Prefs.Instance) flags |= BindingFlags.Instance;
-        if (Prefs.Static) flags |= BindingFlags.Static;
-
-       // if (Prefs.Declared) flags |= BindingFlags.DeclaredOnly;
-        flags |= BindingFlags.DeclaredOnly;
-
-        MemberInfo[] members = component.GetType().GetMembers(flags);
-        foreach (MemberInfo member in members) {
-            try {
-                if (!member.IsDefined(typeof(ObsoleteAttribute), true))
-                    states.Add(member);
-            }
-            catch (Exception e) {
-                //Debug.LogError("Component Error: " + e.Message);
-            }
-        }
-
-        // Draw //
+    void ReflectionGUI(object obj) {
         EditorGUI.indentLevel++;
         EditorGUIUtility.wideMode = true;
         EditorGUIUtility.labelWidth = 130;
 
-        int ID = component.GetInstanceID();
+        int ID = obj.GetHashCode();
         if (!HeaderCollapse.ContainsKey(ID))
-            HeaderCollapse[ID] = isMono;
+            HeaderCollapse[ID] = true;
+
+        GUI.backgroundColor = new Color(0, 0, 0, 0.2f);
+        EditorGUILayout.BeginVertical(Skin.box);
+        {
+            GUI.backgroundColor = new Color(1, 1, 1);
+            EditorGUILayout.BeginHorizontal();
+            {
+                HeaderCollapse[ID] = GUILayout.Toggle(HeaderCollapse[ID], "", Styles.Arrow);
+
+                if(obj is UnityEngine.Object)
+                    GUILayout.Button(EditorGUIUtility.ObjectContent((UnityEngine.Object)obj, null), Styles.Icon);
+                else
+                    GUILayout.Button(Icons.CodeBrowser, Styles.Icon);
+
+                GUILayout.Label(obj.ToString(), Styles.PanelLabel);
+                GUILayout.FlexibleSpace();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            var type = obj is Type ? (Type)obj : obj.GetType();
+            var members = type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+
+            // Assembly -> Modules
+            // Module -> Types
+            // Type -> Members
+
+            if (HeaderCollapse[ID]) {
+
+                if (GUI.Button(GetIndentedControlRect(), "Assembly: " + type.Assembly.FullName))
+                    ReflectionObject = type.Assembly;
+                if (GUI.Button(GetIndentedControlRect(), "Module: " + type.Module.Name))
+                    ReflectionObject = type.Module;
+                if (GUI.Button(GetIndentedControlRect(), "Base: " + type.BaseType?.Name))
+                    ReflectionObject = type.BaseType;
+
+
+                if (obj is System.Reflection.Assembly) {
+                    var assembly = (System.Reflection.Assembly)obj;
+                    var modules = assembly.GetModules();
+                    foreach (var m in modules) {
+                        var name = m.Name;
+                        var typeName = m.GetType().Name;
+                        //name += " : <color=#FF9>" + typeName + "</color>";
+
+                        EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+                        {
+                            //GUI.color = isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
+                            EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
+                            //EditorGUILayout.LabelField(name, Styles.PropertyLabel);
+                            if (GUI.Button(GetIndentedControlRect(), name, Styles.PropertyLabel))
+                                ReflectionObject = m;
+
+                            //GUI.color = Color.white;
+                        }
+                        EditorGUILayout.EndHorizontal();
+                    }
+                }
+
+                if (obj is Module) {
+                    var module = (Module)obj;
+                    var types = module.GetTypes();
+                    foreach (var t in types) {
+                        if (!t.IsPublic)
+                            continue;
+
+                        var name = t.Name;
+                        var typeName = t.GetType().Name;
+                        //name += " : <color=#FF9>" + typeName + "</color>";
+
+                        EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+                        {
+                            //GUI.color = isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
+                            EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
+                            //EditorGUILayout.LabelField(name, Styles.PropertyLabel);
+                            if (GUI.Button(GetIndentedControlRect(), name, Styles.PropertyLabel))
+                                ReflectionObject = t;
+
+                            //GUI.color = Color.white;
+                        }
+                        EditorGUILayout.EndHorizontal();
+                    }
+                }
+
+
+                foreach (var m in members) {
+                    if (m.Name == LastPropName)
+                        continue;
+
+                    LastPropName = m.Name;
+                    var name = m.Name;
+                    var typeName = m.GetType().Name;
+                    bool isPublic = true;
+                    bool isStatic = false;
+                    Type memberType = null;
+                    object value = null;
+
+
+
+                    if (m.MemberType == MemberTypes.Method) {
+                        if (!Prefs.Methods) continue;
+
+                        var method = (MethodInfo)m;
+                        isPublic = method.IsPublic;
+                        isStatic = method.IsStatic;
+                        typeName = method.ReturnType.Name;
+                        memberType = method.ReturnType; 
+                    }
+                    else if (m.MemberType == MemberTypes.Property) {
+                        if (!Prefs.Properties) continue;
+
+                        var prop = (PropertyInfo)m;
+                        var get = prop.GetGetMethod();
+                        isPublic = get != null ? get.IsPublic : false;
+                        isStatic = get != null ? get.IsStatic : false;
+                        typeName = prop.PropertyType.Name;
+                        memberType = prop.PropertyType;
+                        //value = get != null ? get.Invoke(obj, null) : null;
+                        try {
+                            value = prop.GetValue(obj);
+                        }
+                        catch (Exception e) {
+                            value = e.Message;
+                        }
+                    }
+                    else if (m.MemberType == MemberTypes.Field) {
+                        if (!Prefs.Fields) continue;
+
+                        var field = (FieldInfo)m;
+                        isPublic = field.IsPublic;
+                        typeName = field.FieldType.Name;
+                        memberType = field.FieldType;
+
+                        try {
+                            value = field.GetValue(obj);
+                        }
+                        catch (Exception e) {
+                            value = e.Message;
+                        }
+                    }
+                    else if (m.MemberType == MemberTypes.NestedType) {
+                        if (!Prefs.Types) continue;
+
+                        typeName = m.ToString();
+                        memberType = (Type)m;
+                    }
+
+
+                    name += " : <color=#FF9>" + typeName + "</color>";
+                    name += value != null ? " = <color=#9F9>" + value?.ToString() + "</color>" : "";
+
+                    // Node n = new Node(name, m.MemberType, null, "", isPublic, isStatic);
+                    //PropertyGUI(n, null);
+
+                    bool showPublic = isPublic && Prefs.Public;
+                    bool showPrivate = !isPublic && Prefs.Private;
+                    bool showStatic = isStatic && Prefs.Static;
+                    bool showInstance = !isStatic && Prefs.Instance;
+                    if (!((showPublic || showPrivate) && (showInstance || showStatic)))
+                        continue;
+
+                    EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+                    {
+                        GUI.color = isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
+                        EditorGUILayout.LabelField(new GUIContent(MemberIcon[m.MemberType]), Styles.Icon, GUILayout.Width(16));
+                        //EditorGUILayout.LabelField(name, Styles.PropertyLabel);
+                        if (GUI.Button(GetIndentedControlRect(), name, Styles.PropertyLabel))
+                            ReflectionObject = value != null ? value : memberType;
+
+                        GUI.color = Color.white;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+            }
+        }
+
+        EditorGUILayout.EndVertical();
+        EditorGUI.indentLevel--;
+    }
+
+    //====================================================================================================//
+    void ScriptGUI(MonoScript script) {
+        EditorGUI.indentLevel++;
+        EditorGUIUtility.wideMode = true;
+        EditorGUIUtility.labelWidth = 130;
+
+        int ID = script.GetInstanceID();
+        if (!HeaderCollapse.ContainsKey(ID))
+            HeaderCollapse[ID] = true;
 
         GUI.backgroundColor = new Color(0, 0, 0, 0.2f);
         EditorGUILayout.BeginVertical(Skin.box);
@@ -552,77 +758,44 @@ public class CodeBrowser : EditorWindow {
             EditorGUILayout.BeginHorizontal();
             {             
                 HeaderCollapse[ID] = GUILayout.Toggle(HeaderCollapse[ID], "", Styles.Arrow);
-                GUILayout.Button(EditorGUIUtility.ObjectContent(component, null), Styles.Icon);
-                GUILayout.Label(component.GetType().Name, Styles.PanelLabel);
+                GUILayout.Button(EditorGUIUtility.ObjectContent(script, null), Styles.Icon);
+                GUILayout.Label(script.GetType().Name, Styles.PanelLabel);
                 GUILayout.FlexibleSpace();
 
-                if (isMono) {
-                    MonoBehaviour mono = (MonoBehaviour)component;
-                    MonoScript script = MonoScript.FromMonoBehaviour(mono);
-                    //EditorGUILayout.ObjectField(script, script.GetType(), true, GUILayout.MinWidth(50), GUILayout.MaxWidth(200));
-
-
-                    if (GUILayout.Button(SceneSkin.GetStyle("IN ObjectField").normal.background, Styles.Icon)) {
-                        EditorGUIUtility.PingObject(script);
-                        Selection.activeObject = script;
-                    }
+                if (GUILayout.Button(SceneSkin.GetStyle("IN ObjectField").normal.background, Styles.Icon)) {
+                    EditorGUIUtility.PingObject(script);
+                    Selection.activeObject = script;
                 }
             }
             EditorGUILayout.EndHorizontal();
 
             if (HeaderCollapse[ID]) {
-                //EditorGUI.indentLevel++;
-                LastPropName = "";
+                if (ScriptClasses.ContainsKey(ID)) {
+                    foreach (var c in ScriptClasses[ID]) {
+                        EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+                        EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
+                        EditorGUILayout.LabelField(c.Name, Styles.PropertyLabel);
+                        EditorGUILayout.EndHorizontal();
 
-                foreach (MemberInfo prop in states) {
-                    //PropertyGUI(prop, component);
-                    /*MemberInfo[] props = member.GetFields();
-                    foreach (var prop in props) {
-                        PropertyGUI(prop, component);
-                    }*/
-                }
+                        // Sorting //
+                        List<Node> sorted = new List<Node>(c.Nodes);
+                        if (Sorting == SortEnum.Type) 
+                            sorted.Sort((a, b) => a.Type.CompareTo(b.Type));             
+                        else if (Sorting == SortEnum.Abc) 
+                            sorted.Sort((a, b) =>  a.Name.CompareTo(b.Name));                    
 
-                if (isMono) {
-                    if (ScriptClasses.ContainsKey(ID)) {
-                        foreach (var c in ScriptClasses[ID]) {
-                            EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
-                            EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
-                            EditorGUILayout.LabelField(c.Name, Styles.PropertyLabel);
-                            EditorGUILayout.EndHorizontal();
-
-                            // Sorting //
-                            List<Node> sorted = new List<Node>(c.Nodes);
-                            if (Sorting == SortEnum.Type) 
-                                sorted.Sort((a, b) => a.Type.CompareTo(b.Type));             
-                            else if (Sorting == SortEnum.Abc) 
-                                sorted.Sort((a, b) =>  a.Name.CompareTo(b.Name));                    
-
-                            EditorGUI.indentLevel++;
-                            foreach (var member in sorted) {
-                                PropertyGUI(member, component);
-                                //EditorGUILayout.LabelField("    - " + member.Name + " : " + member.Type + " [" + member.StartLine + "-" + member.EndLine + "]");
-                            }
-                            EditorGUI.indentLevel--;
+                        EditorGUI.indentLevel++;
+                        foreach (var member in sorted) {
+                            PropertyGUI(member, null);
+                            //EditorGUILayout.LabelField("    - " + member.Name + " : " + member.Type + " [" + member.StartLine + "-" + member.EndLine + "]");
                         }
+                        EditorGUI.indentLevel--;
                     }
-
-                    //var assemblies = CompilationPipeline.GetAssemblies(AssembliesType.Player);
-                    //var sourcefiles = assemblies
-                    //    .SelectMany(assembly => assembly.sourceFiles)
-                    //    .Where(file => !string.IsNullOrEmpty(file) && file.StartsWith("Assets"));
-
-                    //foreach (var f in assemblies) {
-                    //    EditorGUILayout.LabelField("Assembly: " + f.name);
-                    //}
-
-                    //AssetDatabase.LoadMainAssetAtPath();
                 }
-
-                //EditorGUI.indentLevel--;
             }
         }
-        EditorGUILayout.EndVertical();
 
+        EditorGUILayout.EndVertical();
         EditorGUI.indentLevel--;
     }
 
@@ -647,7 +820,7 @@ public class CodeBrowser : EditorWindow {
         if (!((showPublic || showPrivate) && (showInstance || showStatic)))
             return;
 
-        if (!(prop.Type == NodeTypes.Method && Prefs.Methods || prop.Type == NodeTypes.Property && Prefs.Properties || prop.Type == NodeTypes.Field && Prefs.Fields || prop.Type == NodeTypes.Event && Prefs.Events))
+        if (!(prop.Type == MemberTypes.Method && Prefs.Methods || prop.Type == MemberTypes.Property && Prefs.Properties || prop.Type == MemberTypes.Field && Prefs.Fields || prop.Type == MemberTypes.Event && Prefs.Events))
             return;
     
         string text = prop.Name;
@@ -664,19 +837,19 @@ public class CodeBrowser : EditorWindow {
             CodeSnippet = prop.Docs == "" ? prop.Code : string.Join("\n\n", prop.Docs, prop.Code);
             HoverNode = prop;
 
-            if(LeftDown)
-                OpenScript(prop, component);
+            //if(LeftDown)
+            //    OpenScript(prop, component);
         }
 
         // Draw //
         EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
         {
-            if (prop.Type == NodeTypes.Field || prop.Type == NodeTypes.Property)
+            if (prop.Type == MemberTypes.Field || prop.Type == MemberTypes.Property)
                 text += "  <size=10><color=" + (prop.isPublic ? "#777" : "#555") + ">" + prop.DataType + "</color></size>";
 
             GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
             GUI.color *= over ? 1.5f : 1;
-            EditorGUILayout.LabelField(new GUIContent(TypetoIcon[prop.Type]), Styles.Icon, GUILayout.Width(16));
+            EditorGUILayout.LabelField(new GUIContent(TypeIcon[prop.Type]), Styles.Icon, GUILayout.Width(16));
 
             GUI.Label(GetIndentedControlRect(), text, Styles.PropertyLabel);
             //if (GUI.Button(GetIndentedControlRect(), text, Styles.PropertyLabel))
