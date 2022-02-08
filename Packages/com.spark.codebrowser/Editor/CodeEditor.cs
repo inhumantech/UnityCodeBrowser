@@ -80,7 +80,6 @@ namespace com.meta.codeeditor {
         NodeTypes OverType;
 
         //====================================================================================================//
-        [MenuItem("Window/Code Editor")]
         public static void ShowCodeEditor() {
             EditorWindow window = GetWindow(typeof(CodeEditor));
             window.Show();

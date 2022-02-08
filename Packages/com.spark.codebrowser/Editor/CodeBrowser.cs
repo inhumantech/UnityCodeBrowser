@@ -80,7 +80,7 @@ public class CodeBrowser : EditorWindow {
     MemberTypes OverType;
 
     //====================================================================================================//
-    [MenuItem("Window/Code Browser")]
+    [MenuItem("Meta/Code Browser")]
     public static void ShowCodeBrowser() {
         EditorWindow window = GetWindow(typeof(CodeBrowser));
         window.Show();
@@ -235,11 +235,6 @@ public class CodeBrowser : EditorWindow {
 
     //====================================================================================================//
     void OnGUI() {
-        // Call Code //
-        dynamic script = new Obj(CompilerTool.DllFullPath(), "GUI");
-        script.CodeBrowser();
-
-
         FoldoutStyle = new GUIStyle(SceneSkin.GetStyle("Foldout"));
         FoldoutStyle.clipping = TextClipping.Clip;
         FoldoutStyle.wordWrap = false;

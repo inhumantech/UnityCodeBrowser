@@ -12,19 +12,14 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "ICSharpCode.SharpZipLib.dll",
         "Microsoft.CodeAnalysis.dll",
         "Microsoft.CodeAnalysis.CSharp.dll",
-        "Microsoft.CodeAnalysis.CSharp.Scripting.dll",
-        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll",
         "Microsoft.CodeAnalysis.Scripting.dll",
-        "Microsoft.CodeAnalysis.Workspaces.dll",
-        "Mono.Cecil.dll",
+        "Microsoft.CodeAnalysis.CSharp.Scripting.dll",
         "System.Collections.Immutable.dll",
-        "Newtonsoft.Json.dll",
-        ""
+        "Mono.Cecil.dll"
     ],
-    "autoReferenced": true,
+    "autoReferenced": false,
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false
