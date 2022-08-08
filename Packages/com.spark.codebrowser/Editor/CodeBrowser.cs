@@ -249,16 +249,16 @@ public class CodeBrowser : EditorWindow {
         //EditorApplication.update += Progress;
         //}
 
-        if (GUILayout.Button("Application"))
-            ReflectionObject = typeof(Application);
-        if (GUILayout.Button("Editor"))
-            ReflectionObject = typeof(EditorApplication);
-        if (GUILayout.Button("GUI"))
-            ReflectionObject = typeof(GUI);
-        if (GUILayout.Button("Selection"))
-            ReflectionObject = Selection.activeObject;
+        //if (GUILayout.Button("Application"))
+        //    ReflectionObject = typeof(Application);
+        //if (GUILayout.Button("Editor"))
+        //    ReflectionObject = typeof(EditorApplication);
+        //if (GUILayout.Button("GUI"))
+        //    ReflectionObject = typeof(GUI);
+        //if (GUILayout.Button("Selection"))
+        //    ReflectionObject = Selection.activeObject;
 
-        GUILayout.TextField(ReflectionObject.ToString());
+        //GUILayout.TextField(ReflectionObject.ToString());
 
         if (Selection.activeObject != null) {
             UnityEngine.Object obj = Selection.activeObject;
@@ -286,13 +286,13 @@ public class CodeBrowser : EditorWindow {
 
         ScrollPos = GUILayout.BeginScrollView(ScrollPos);
         {
-            ReflectionGUI(ReflectionObject);
+            //ReflectionGUI(ReflectionObject);
 
 
 
             foreach (var obj in Selection.objects) {
                 //ReflectionGUI(obj);
-                continue;
+                //continue;
 
                 Type type = obj.GetType();
                 if (type == typeof(GameObject))
@@ -534,8 +534,9 @@ public class CodeBrowser : EditorWindow {
                 Component[] components = obj.GetComponents<Component>();
 
                 foreach (Component c in components) {
-                    if (c is MonoBehaviour && Prefs.Mono) {
-                        MonoScript script = MonoScript.FromMonoBehaviour((MonoBehaviour)c);
+                    if (typeof(MonoBehaviour).IsAssignableFrom(c.GetType()) && Prefs.Mono) {
+                        MonoBehaviour mono = (MonoBehaviour)c;
+                        MonoScript script = MonoScript.FromMonoBehaviour(mono);
                         ScriptGUI(script);
                     }
                 }
@@ -754,7 +755,7 @@ public class CodeBrowser : EditorWindow {
             {             
                 HeaderCollapse[ID] = GUILayout.Toggle(HeaderCollapse[ID], "", Styles.Arrow);
                 GUILayout.Button(EditorGUIUtility.ObjectContent(script, null), Styles.Icon);
-                GUILayout.Label(script.GetType().Name, Styles.PanelLabel);
+                GUILayout.Label(script.name, Styles.PanelLabel);
                 GUILayout.FlexibleSpace();
 
                 if (GUILayout.Button(SceneSkin.GetStyle("IN ObjectField").normal.background, Styles.Icon)) {
@@ -767,10 +768,10 @@ public class CodeBrowser : EditorWindow {
             if (HeaderCollapse[ID]) {
                 if (ScriptClasses.ContainsKey(ID)) {
                     foreach (var c in ScriptClasses[ID]) {
-                        EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
-                        EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
-                        EditorGUILayout.LabelField(c.Name, Styles.PropertyLabel);
-                        EditorGUILayout.EndHorizontal();
+                        //EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+                        //EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
+                        //EditorGUILayout.LabelField(c.Name, Styles.PropertyLabel);
+                        //EditorGUILayout.EndHorizontal();
 
                         // Sorting //
                         List<Node> sorted = new List<Node>(c.Nodes);
@@ -779,12 +780,12 @@ public class CodeBrowser : EditorWindow {
                         else if (Sorting == SortEnum.Abc) 
                             sorted.Sort((a, b) =>  a.Name.CompareTo(b.Name));                    
 
-                        EditorGUI.indentLevel++;
+                        //EditorGUI.indentLevel++;
                         foreach (var member in sorted) {
                             PropertyGUI(member, null);
                             //EditorGUILayout.LabelField("    - " + member.Name + " : " + member.Type + " [" + member.StartLine + "-" + member.EndLine + "]");
                         }
-                        EditorGUI.indentLevel--;
+                        //EditorGUI.indentLevel--;
                     }
                 }
             }
