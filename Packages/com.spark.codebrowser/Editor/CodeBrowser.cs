@@ -66,7 +66,7 @@ public class CodeBrowser : EditorWindow {
 
     [Flags]
     enum OptionEnum { Public = 1, Private = 2, Instance = 4, Static = 8, Builtin = 16 };
-    Enum opt = OptionEnum.Public | OptionEnum.Private | OptionEnum.Instance;
+    Enum opt = OptionEnum.Public | OptionEnum.Private | OptionEnum.Instance | OptionEnum.Static | OptionEnum.Builtin;
     enum SortEnum { None, Type, Abc };
     SortEnum Sorting = SortEnum.Type;
     bool LeftDown;
@@ -298,7 +298,7 @@ public class CodeBrowser : EditorWindow {
                 if (type == typeof(GameObject))
                     ObjectGUI((GameObject)obj);
                 else if (type == typeof(MonoScript))
-                    ScriptGUI((MonoScript)obj);
+                    ScriptGUI((MonoScript)obj, null);
                 else
                     EditorGUILayout.LabelField(obj.name + " : " + obj.GetType().Name);
             }
@@ -537,7 +537,7 @@ public class CodeBrowser : EditorWindow {
                     if (typeof(MonoBehaviour).IsAssignableFrom(c.GetType()) && Prefs.Mono) {
                         MonoBehaviour mono = (MonoBehaviour)c;
                         MonoScript script = MonoScript.FromMonoBehaviour(mono);
-                        ScriptGUI(script);
+                        ScriptGUI(script, c);
                     }
                 }
 
@@ -738,7 +738,7 @@ public class CodeBrowser : EditorWindow {
     }
 
     //====================================================================================================//
-    void ScriptGUI(MonoScript script) {
+    void ScriptGUI(MonoScript script, Component component) {
         EditorGUI.indentLevel++;
         EditorGUIUtility.wideMode = true;
         EditorGUIUtility.labelWidth = 130;
@@ -782,7 +782,7 @@ public class CodeBrowser : EditorWindow {
 
                         //EditorGUI.indentLevel++;
                         foreach (var member in sorted) {
-                            PropertyGUI(member, null);
+                            PropertyGUI(member, script, component);
                             //EditorGUILayout.LabelField("    - " + member.Name + " : " + member.Type + " [" + member.StartLine + "-" + member.EndLine + "]");
                         }
                         //EditorGUI.indentLevel--;
@@ -796,7 +796,7 @@ public class CodeBrowser : EditorWindow {
     }
 
     //====================================================================================================//  
-    void PropertyGUI(Node prop, Component component) {
+    void PropertyGUI(Node prop, MonoScript script, Component component) {
         if (prop.Name.StartsWith("get_") || prop.Name.StartsWith("set_"))
             return;
 
@@ -833,8 +833,8 @@ public class CodeBrowser : EditorWindow {
             CodeSnippet = prop.Docs == "" ? prop.Code : string.Join("\n\n", prop.Docs, prop.Code);
             HoverNode = prop;
 
-            //if(LeftDown)
-            //    OpenScript(prop, component);
+            if(LeftDown)
+                OpenScript(prop, script, component);
         }
 
         // Draw //
@@ -857,15 +857,20 @@ public class CodeBrowser : EditorWindow {
     }
 
     //====================================================================================================//
-    void OpenScript(Node prop, Component component) {
+    void OpenScript(Node prop, MonoScript script, Component component) {
         if (prop == LastOpenedNode)
             return;
 
-        if (component is MonoBehaviour) {
-            MonoBehaviour mono = (MonoBehaviour)component;
-            MonoScript script = MonoScript.FromMonoBehaviour(mono);
+        //if (component is MonoBehaviour) {
+        //    MonoBehaviour mono = (MonoBehaviour)component;
+        //    MonoScript script = MonoScript.FromMonoBehaviour(mono);
+        //    AssetDatabase.OpenAsset(script, prop.StartLine);
+        //    LastOpenedNode = prop;
+        //}
+        if (script != null) {
             AssetDatabase.OpenAsset(script, prop.StartLine);
             LastOpenedNode = prop;
+            Debug.Log("Open Script: " + prop.Name);
         }
     }
 
