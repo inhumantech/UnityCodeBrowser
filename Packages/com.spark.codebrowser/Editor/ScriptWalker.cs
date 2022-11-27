@@ -85,10 +85,22 @@ public class ScriptWalker : CSharpSyntaxWalker {
     }
 
     //====================================================================================================//
+    public override void VisitStructDeclaration(StructDeclarationSyntax node) {
+        Nodes.Add(new Node(node.Identifier.ToString(), MemberTypes.Custom, node));
+        base.VisitStructDeclaration(node);
+    }
+
+    //====================================================================================================//
+    public override void VisitInterfaceDeclaration(InterfaceDeclarationSyntax node) {
+        Nodes.Add(new Node(node.Identifier.ToString(), MemberTypes.Custom, node));
+        base.VisitInterfaceDeclaration(node);
+    }
+
+    //====================================================================================================//
     public override void VisitMethodDeclaration(MethodDeclarationSyntax node) {
         string docs = GetDocs(node);
         var mods = GetModifiers(node.Modifiers);
-        AddtoClass(new Node(node.Identifier.ToString(), MemberTypes.Method, node, docs, mods.Public, mods.Static));
+        AddtoParent(new Node(node.Identifier.ToString(), MemberTypes.Method, node, docs, mods.Public, mods.Static));
         base.VisitMethodDeclaration(node);
     }
 
@@ -114,7 +126,7 @@ public class ScriptWalker : CSharpSyntaxWalker {
     //====================================================================================================//
     public override void VisitFieldDeclaration(FieldDeclarationSyntax node) {
         foreach (var v in node.Declaration.Variables) {
-            string docs = GetDocs(v);
+            string docs = node.GetText().ToString();// GetDocs(v);
             var mods = GetModifiers(node.Modifiers);
             string typeName = node.Declaration.Type.ToString();
             bool isEvent = false;
@@ -122,7 +134,7 @@ public class ScriptWalker : CSharpSyntaxWalker {
             if (Types.ContainsKey(typeName) && Types[typeName].IsSubclassOf(typeof(UnityEventBase)))
                 isEvent = true;
 
-            AddtoClass(new Node(v.Identifier.ToString(), isEvent ? MemberTypes.Event : MemberTypes.Field, v, docs, mods.Public, mods.Static));
+            AddtoParent(new Node(v.Identifier.ToString(), isEvent ? MemberTypes.Event : MemberTypes.Field, v, docs, mods.Public, mods.Static) {DataType = typeName });
         }
 
         base.VisitFieldDeclaration(node);
@@ -132,13 +144,30 @@ public class ScriptWalker : CSharpSyntaxWalker {
     public override void VisitPropertyDeclaration(PropertyDeclarationSyntax node) {
         string docs = GetDocs(node);
         var mods = GetModifiers(node.Modifiers);
-        AddtoClass(new Node(node.Identifier.ToString(), MemberTypes.Property, node, docs, mods.Public, mods.Static));
+        AddtoParent(new Node(node.Identifier.ToString(), MemberTypes.Property, node, docs, mods.Public, mods.Static));
         base.VisitPropertyDeclaration(node);
     }
 
     //====================================================================================================//
-    void AddtoClass(Node node) {
-        var parent = node.SyntaxNode.FirstAncestorOrSelf<ClassDeclarationSyntax>();
+    public override void VisitEnumDeclaration(EnumDeclarationSyntax node) {
+        string docs = GetDocs(node);
+        var mods = GetModifiers(node.Modifiers);
+        AddtoParent(new Node(node.Identifier.ToString(), MemberTypes.Event, node, docs, mods.Public, mods.Static));
+        base.VisitEnumDeclaration(node);
+    }
+
+    //====================================================================================================//
+    void AddtoParent(Node node) {
+        var parents = node.SyntaxNode.Ancestors();
+        SyntaxNode parent = null;
+        foreach (var p in parents) {
+            var t = p.GetType();
+            if (t == typeof(ClassDeclarationSyntax) || t == typeof(InterfaceDeclarationSyntax) || t == typeof(StructDeclarationSyntax)) {
+                parent = p;
+                break;
+            }         
+        }
+        
         foreach (var n in Nodes) {
             if (n.SyntaxNode == parent) {
                 n.Nodes.Add(node);
@@ -343,8 +372,8 @@ public class Node {
         Name = name;
         Type = type;
         SyntaxNode = node;
-        StartLine = node != null ? node.GetLocation().GetLineSpan().StartLinePosition.Line + 1 : 0;
-        EndLine = node != null ? node.GetLocation().GetLineSpan().EndLinePosition.Line + 1 : 0;
+        StartLine = node != null ? node.GetLocation().GetLineSpan().StartLinePosition.Line + 0 : 0;
+        EndLine = node != null ? node.GetLocation().GetLineSpan().EndLinePosition.Line + 0 : 0;
         Code = node != null ? node.ToString() : "";
         Docs = docs;
         isPublic = pub;

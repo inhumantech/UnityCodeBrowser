@@ -1,7 +1,7 @@
 {
   "name": "com.spark.codebrowser",
   "displayName": "[Tool] Code Browser",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": {
     "name": "Erik Larsson",
     "email": "eriklarsson@fb.com"

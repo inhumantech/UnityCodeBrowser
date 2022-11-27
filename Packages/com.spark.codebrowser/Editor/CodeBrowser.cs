@@ -336,33 +336,45 @@ public class CodeBrowser : EditorWindow {
     }
 
     //====================================================================================================//
+    void LoadSyntaxTree(MonoScript script) {
+        // Roslyn // 
+        SyntaxTree tree = CSharpSyntaxTree.ParseText("#define UNITY_EDITOR\n" + script.text);
+        CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
+        MetadataReference mscorlib = MetadataReference.CreateFromFile(typeof(object).GetTypeInfo().Assembly.Location);
+        var compilation = CSharpCompilation.Create("Loader", syntaxTrees: new[] { tree }, references: new[] { mscorlib });
+        var model = compilation.GetSemanticModel(tree);
+
+        // Walk Nodes //
+        var data = new ScriptWalker(script, model);
+        data.Visit(root);
+        ScriptClasses[script.GetInstanceID()] = data.Nodes;
+        CodeFull = data.Text.ToString();
+        //File.WriteAllText("c:/Spark/Types.txt", data.Text.ToString());
+    }
+
+    //====================================================================================================//
     void LoadScriptNodes() {
         double start = EditorApplication.timeSinceStartup;
 
-        foreach (GameObject obj in Selection.gameObjects) {
-            Component[] components = obj.GetComponents<Component>();
-            foreach (Component component in components) {
-                if (!(component is MonoBehaviour))
-                    continue;
+        foreach (var obj in Selection.objects) {
+            Type type = obj.GetType();
+            if (type == typeof(GameObject)) {
+                Component[] components = ((GameObject)obj).GetComponents<Component>();
+                foreach (Component component in components) {
+                    if (!(component is MonoBehaviour))
+                        continue;
 
-                MonoBehaviour mono = (MonoBehaviour)component;
-                MonoScript script = MonoScript.FromMonoBehaviour(mono);
-
-                // Roslyn // 
-                Microsoft.CodeAnalysis.SyntaxTree tree = CSharpSyntaxTree.ParseText(script.text);
-                CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
-                MetadataReference mscorlib = MetadataReference.CreateFromFile(typeof(object).GetTypeInfo().Assembly.Location);
-                var compilation = CSharpCompilation.Create("Loader", syntaxTrees: new[] { tree }, references: new[] { mscorlib });
-                var model = compilation.GetSemanticModel(tree);
-
-                // Walk Nodes //
-                var data = new ScriptWalker(component, model);
-                data.Visit(root);
-                ScriptClasses[script.GetInstanceID()] = data.Nodes;
-                CodeFull = data.Text.ToString();
-                //File.WriteAllText("c:/Spark/Types.txt", data.Text.ToString());
+                    MonoBehaviour mono = (MonoBehaviour)component;
+                    MonoScript script = MonoScript.FromMonoBehaviour(mono);
+                    LoadSyntaxTree(script);
+                }
+            }
+            else if (type == typeof(MonoScript)) {
+                MonoScript script = (MonoScript)obj;
+                LoadSyntaxTree(script);
             }
         }
+
         //Debug.Log("Time: " + (EditorApplication.timeSinceStartup - start).ToString("N2") + "s");
     }
 
@@ -567,7 +579,7 @@ public class CodeBrowser : EditorWindow {
             {
                 HeaderCollapse[ID] = GUILayout.Toggle(HeaderCollapse[ID], "", Styles.Arrow);
 
-                if(obj is UnityEngine.Object)
+                if (obj is UnityEngine.Object)
                     GUILayout.Button(EditorGUIUtility.ObjectContent((UnityEngine.Object)obj, null), Styles.Icon);
                 else
                     GUILayout.Button(Icons.CodeBrowser, Styles.Icon);
@@ -663,7 +675,7 @@ public class CodeBrowser : EditorWindow {
                         isPublic = method.IsPublic;
                         isStatic = method.IsStatic;
                         typeName = method.ReturnType.Name;
-                        memberType = method.ReturnType; 
+                        memberType = method.ReturnType;
                     }
                     else if (m.MemberType == MemberTypes.Property) {
                         if (!Prefs.Properties) continue;
@@ -752,7 +764,7 @@ public class CodeBrowser : EditorWindow {
         {
             GUI.backgroundColor = new Color(1, 1, 1);
             EditorGUILayout.BeginHorizontal();
-            {             
+            {
                 HeaderCollapse[ID] = GUILayout.Toggle(HeaderCollapse[ID], "", Styles.Arrow);
                 GUILayout.Button(EditorGUIUtility.ObjectContent(script, null), Styles.Icon);
                 GUILayout.Label(script.name, Styles.PanelLabel);
@@ -768,24 +780,24 @@ public class CodeBrowser : EditorWindow {
             if (HeaderCollapse[ID]) {
                 if (ScriptClasses.ContainsKey(ID)) {
                     foreach (var c in ScriptClasses[ID]) {
-                        //EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
-                        //EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
-                        //EditorGUILayout.LabelField(c.Name, Styles.PropertyLabel);
-                        //EditorGUILayout.EndHorizontal();
+                        EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
+                        EditorGUILayout.LabelField(new GUIContent(Icons.CodeBrowser), Styles.Icon, GUILayout.Width(16));
+                        EditorGUILayout.LabelField(c.Name, Styles.PropertyLabel);
+                        EditorGUILayout.EndHorizontal();
 
                         // Sorting //
                         List<Node> sorted = new List<Node>(c.Nodes);
-                        if (Sorting == SortEnum.Type) 
-                            sorted.Sort((a, b) => a.Type.CompareTo(b.Type));             
-                        else if (Sorting == SortEnum.Abc) 
-                            sorted.Sort((a, b) =>  a.Name.CompareTo(b.Name));                    
+                        if (Sorting == SortEnum.Type)
+                            sorted.Sort((a, b) => a.Type.CompareTo(b.Type));
+                        else if (Sorting == SortEnum.Abc)
+                            sorted.Sort((a, b) => a.Name.CompareTo(b.Name));
 
-                        //EditorGUI.indentLevel++;
+                        EditorGUI.indentLevel++;
                         foreach (var member in sorted) {
                             PropertyGUI(member, script, component);
                             //EditorGUILayout.LabelField("    - " + member.Name + " : " + member.Type + " [" + member.StartLine + "-" + member.EndLine + "]");
                         }
-                        //EditorGUI.indentLevel--;
+                        EditorGUI.indentLevel--;
                     }
                 }
             }
@@ -818,7 +830,7 @@ public class CodeBrowser : EditorWindow {
 
         if (!(prop.Type == MemberTypes.Method && Prefs.Methods || prop.Type == MemberTypes.Property && Prefs.Properties || prop.Type == MemberTypes.Field && Prefs.Fields || prop.Type == MemberTypes.Event && Prefs.Events))
             return;
-    
+
         string text = prop.Name;
         LastPropName = text;
 
@@ -833,7 +845,7 @@ public class CodeBrowser : EditorWindow {
             CodeSnippet = prop.Docs == "" ? prop.Code : string.Join("\n\n", prop.Docs, prop.Code);
             HoverNode = prop;
 
-            if(LeftDown)
+            if (LeftDown)
                 OpenScript(prop, script, component);
         }
 
@@ -841,7 +853,7 @@ public class CodeBrowser : EditorWindow {
         EditorGUILayout.BeginHorizontal(Styles.PropertyHorizontal);
         {
             if (prop.Type == MemberTypes.Field || prop.Type == MemberTypes.Property)
-                text += "  <size=10><color=" + (prop.isPublic ? "#777" : "#555") + ">" + prop.DataType + "</color></size>";
+                text += "  <size=10><color=" + (over ? "#999" : prop.isPublic ? "#555" : "#444") + ">" + prop.DataType + "</color></size>";
 
             GUI.color = prop.isPublic ? Color.white : new Color(1, 1, 1, 0.4f);
             GUI.color *= over ? 1.5f : 1;
@@ -930,10 +942,10 @@ public class CodeBrowser : EditorWindow {
 
     void Update() {
         //if (Event.current.type == EventType.MouseMove)
-            Repaint(); 
+        Repaint();
 
         //if (Event.current.type == EventType.Repaint)
-            //PopupWindow.Show(buttonRect, Popup);
+        //PopupWindow.Show(buttonRect, Popup);
     }
 
     //====================================================================================================//
@@ -949,7 +961,7 @@ public class CodeBrowser : EditorWindow {
             for (int i = start - 1; i < end; i++) {
                 string line = lines[i];
                 if (line.Length > left)
-                    line = line.Substring(left); 
+                    line = line.Substring(left);
 
                 code += line.Replace("  ", "    ") + (i == end - 1 ? "" : "\n");
             }
